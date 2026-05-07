@@ -114,6 +114,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .add-new-btn { display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 10px; border: 1.5px dashed #ddd; background: transparent; font-size: 13px; color: #aaa; cursor: pointer; width: 100%; justify-content: center; transition: all 0.15s; margin-top: 8px; }
 .add-new-btn:hover { border-color: #1D9E75; color: #1D9E75; background: #f0faf6; }
 
+/* ── Transport Modal ── */
+.transport-modal { background: #fff; border-radius: 16px; padding: 24px; width: 520px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+.transport-section { margin-bottom: 20px; }
+.transport-section h4 { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #f0ede8; }
+.transport-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+.transport-input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; outline: none; color: #1a1a1a; }
+.transport-input:focus { border-color: #378ADD; }
+.transport-select { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; outline: none; color: #1a1a1a; background: #fff; }
+.transport-btn { padding: 8px 16px; background: #378ADD; color: white; border: none; border-radius: 8px; font-size: 12px; cursor: pointer; white-space: nowrap; font-weight: 500; }
+.transport-btn:hover { background: #2670bb; }
+.transport-result { background: #f5f9ff; border: 1px solid #c5dcf5; border-radius: 10px; padding: 14px; margin-top: 10px; font-size: 12px; }
+.transport-result-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e8f0fb; }
+.transport-result-item:last-child { border-bottom: none; padding-bottom: 0; }
+.transport-mode-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+.transport-detail { flex: 1; }
+.transport-detail .route-name { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+.transport-detail .route-info { font-size: 11px; color: #666; margin-top: 3px; }
+.transport-detail .route-time { font-size: 12px; font-weight: 600; color: #378ADD; margin-top: 2px; }
+.transport-loading { text-align: center; padding: 20px; color: #aaa; font-size: 13px; }
+.transport-error { text-align: center; padding: 14px; color: #e24b4a; font-size: 12px; background: #fff5f5; border-radius: 8px; border: 1px solid #fcc; }
+.day-route-item { background: #fff; border: 1px solid #e5e3de; border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+.day-route-arrow { color: #378ADD; font-size: 16px; }
+.day-route-info { flex: 1; font-size: 12px; }
+.day-route-time { font-size: 11px; color: #378ADD; font-weight: 600; }
+
 /* ── Popup (모바일: 바텀시트 / 데스크탑: 위치 고정) ── */
 .map-popup-overlay { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.3); }
 .map-popup {
@@ -224,8 +249,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <div class="day-card">
       <div class="day-card-header">
         <span class="dlabel" id="activeDayLabel">Day 1</span>
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <button id="showDayMapBtn" onclick="showDayOnMap()" style="font-size:11px;padding:5px 12px;border-radius:14px;border:1px solid #1D9E75;background:transparent;color:#1D9E75;cursor:pointer;transition:all 0.15s;white-space:nowrap;" onmouseover="this.style.background='#1D9E75';this.style.color='white'" onmouseout="this.style.background='transparent';this.style.color='#1D9E75'">🗺 지도에 표시</button>
+          <button onclick="openTransportModal()" style="font-size:11px;padding:5px 12px;border-radius:14px;border:1px solid #378ADD;background:transparent;color:#378ADD;cursor:pointer;transition:all 0.15s;white-space:nowrap;" onmouseover="this.style.background='#378ADD';this.style.color='white'" onmouseout="this.style.background='transparent';this.style.color='#378ADD'">🚃 교통편 검색</button>
           <span class="dcnt" id="activeDayCnt">0개 장소</span>
         </div>
       </div>
@@ -456,7 +482,256 @@ function editMemoInline(placeId,day,el){
   ta.addEventListener('keydown',e=>{if(e.key==='Escape'){item.memo=ta.value.trim();renderSchedule();autoSave();}});
 }
 
-/* ════ FILTER ════ */
+/* ════ 교통편 검색 ════ */
+function openTransportModal() {
+  const items = schedule[activeDay];
+  const placeOptions = places.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+  // Day 전체 동선 구간 생성
+  let dayRouteRows = '';
+  if (items.length >= 2) {
+    for (let i = 0; i < items.length - 1; i++) {
+      const from = places.find(p => p.id === items[i].id);
+      const to = places.find(p => p.id === items[i+1].id);
+      if (from && to) {
+        dayRouteRows += `<div class="day-route-item">
+          <div class="day-route-info">
+            <span style="font-weight:500">${from.name}</span>
+            <span class="day-route-arrow"> → </span>
+            <span style="font-weight:500">${to.name}</span>
+          </div>
+          <button class="transport-btn" style="font-size:11px;padding:5px 10px;" onclick="searchRouteById(${from.id},${to.id},'TRANSIT')">검색</button>
+        </div>`;
+      }
+    }
+  }
+
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="closeModal()">
+      <div class="transport-modal" onclick="event.stopPropagation()">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+          <h3 style="font-size:16px;font-weight:600;">🚃 교통편 검색</h3>
+          <button onclick="closeModal()" style="background:none;border:none;font-size:20px;color:#bbb;cursor:pointer;">×</button>
+        </div>
+
+        <!-- A. 장소 간 경로 검색 -->
+        <div class="transport-section">
+          <h4>📍 장소 간 경로 검색</h4>
+          <div class="transport-row">
+            <select class="transport-select" id="fromPlace" style="flex:1">
+              <option value="">출발지 선택</option>
+              ${placeOptions}
+            </select>
+            <span style="font-size:16px;color:#378ADD;padding:6px 4px;">→</span>
+            <select class="transport-select" id="toPlace" style="flex:1">
+              <option value="">도착지 선택</option>
+              ${placeOptions}
+            </select>
+          </div>
+          <div class="transport-row">
+            <select class="transport-select" id="travelMode">
+              <option value="TRANSIT">🚃 대중교통</option>
+              <option value="WALK">🚶 도보</option>
+              <option value="DRIVE">🚗 자동차</option>
+            </select>
+            <button class="transport-btn" onclick="searchRoute()">검색</button>
+          </div>
+          <div id="routeResult"></div>
+        </div>
+
+        <!-- B. 직접 장소 입력 검색 -->
+        <div class="transport-section">
+          <h4>🔍 직접 입력 검색</h4>
+          <div class="transport-row">
+            <input class="transport-input" id="fromText" placeholder="출발지 (예: 나리타 공항)" />
+            <span style="font-size:16px;color:#378ADD;padding:6px 4px;">→</span>
+            <input class="transport-input" id="toText" placeholder="도착지 (예: 신주쿠역)" />
+          </div>
+          <div class="transport-row">
+            <select class="transport-select" id="travelModeText">
+              <option value="TRANSIT">🚃 대중교통</option>
+              <option value="WALK">🚶 도보</option>
+              <option value="DRIVE">🚗 자동차</option>
+            </select>
+            <button class="transport-btn" onclick="searchRouteByText()">검색</button>
+          </div>
+          <div id="textRouteResult"></div>
+        </div>
+
+        <!-- C. Day 전체 동선 -->
+        <div class="transport-section">
+          <h4>🗓 Day ${activeDay} 전체 동선 이동시간</h4>
+          ${items.length < 2
+            ? '<div style="font-size:12px;color:#aaa;padding:10px;">Day '+activeDay+'에 장소가 2개 이상 있어야 해요.</div>'
+            : dayRouteRows + `<div style="margin-top:10px;"><button class="transport-btn" style="width:100%" onclick="searchAllDayRoutes()">전체 구간 한번에 검색</button></div>`
+          }
+          <div id="allDayResult"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function getCoordsByPlaceId(placeId) {
+  const place = places.find(p => p.id === placeId);
+  if (!place) return null;
+  return { lat: place.lat, lng: place.lng, name: place.name };
+}
+
+async function geocodeText(text) {
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_API_KEY,
+      'X-Goog-FieldMask': 'places.displayName,places.location'
+    },
+    body: JSON.stringify({ textQuery: text + ' 도쿄', languageCode: 'ko',
+      locationBias: { circle: { center: { latitude: 35.6892, longitude: 139.6921 }, radius: 80000 } }
+    })
+  });
+  const data = await res.json();
+  if (!data.places?.length) return null;
+  const p = data.places[0];
+  return { lat: p.location.latitude, lng: p.location.longitude, name: p.displayName.text };
+}
+
+async function callRoutesAPI(origin, destination, mode) {
+  const modeMap = { TRANSIT: 'TRANSIT', WALK: 'WALK', DRIVE: 'DRIVE' };
+  const body = {
+    origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+    destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+    travelMode: modeMap[mode] || 'TRANSIT',
+    languageCode: 'ko',
+    computeAlternativeRoutes: false
+  };
+  if (mode === 'TRANSIT') body.transitPreferences = { routingPreference: 'LESS_WALKING' };
+
+  const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_API_KEY,
+      'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.legs,routes.description'
+    },
+    body: JSON.stringify(body)
+  });
+  return await res.json();
+}
+
+function formatDuration(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}시간 ${m}분`;
+  return `${m}분`;
+}
+
+function formatDistance(meters) {
+  if (meters >= 1000) return (meters/1000).toFixed(1) + 'km';
+  return meters + 'm';
+}
+
+function renderRouteResult(data, containerId) {
+  const el = document.getElementById(containerId);
+  if (!data.routes?.length) {
+    el.innerHTML = `<div class="transport-error">경로를 찾을 수 없어요.<br>다른 이동수단을 선택해보세요.</div>`;
+    return;
+  }
+  const route = data.routes[0];
+  const duration = formatDuration(parseInt(route.duration));
+  const distance = formatDistance(route.distanceMeters);
+  const modeIcon = { TRANSIT:'🚃', WALK:'🚶', DRIVE:'🚗' };
+  el.innerHTML = `<div class="transport-result">
+    <div class="transport-result-item">
+      <div class="transport-mode-icon">🗺</div>
+      <div class="transport-detail">
+        <div class="route-name">${route.description || '추천 경로'}</div>
+        <div class="route-info">거리: ${distance}</div>
+        <div class="route-time">⏱ 소요시간: ${duration}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function searchRoute() {
+  const fromId = parseInt(document.getElementById('fromPlace').value);
+  const toId = parseInt(document.getElementById('toPlace').value);
+  const mode = document.getElementById('travelMode').value;
+  if (!fromId || !toId) { alert('출발지와 도착지를 선택해주세요!'); return; }
+  if (fromId === toId) { alert('출발지와 도착지가 같아요!'); return; }
+  const el = document.getElementById('routeResult');
+  el.innerHTML = '<div class="transport-loading">검색 중... 🔍</div>';
+  try {
+    const origin = await getCoordsByPlaceId(fromId);
+    const dest = await getCoordsByPlaceId(toId);
+    const data = await callRoutesAPI(origin, dest, mode);
+    renderRouteResult(data, 'routeResult');
+  } catch(e) { document.getElementById('routeResult').innerHTML = `<div class="transport-error">검색 중 오류가 발생했어요.</div>`; }
+}
+
+async function searchRouteByText() {
+  const fromText = document.getElementById('fromText').value.trim();
+  const toText = document.getElementById('toText').value.trim();
+  const mode = document.getElementById('travelModeText').value;
+  if (!fromText || !toText) { alert('출발지와 도착지를 입력해주세요!'); return; }
+  const el = document.getElementById('textRouteResult');
+  el.innerHTML = '<div class="transport-loading">장소 검색 중... 🔍</div>';
+  try {
+    const origin = await geocodeText(fromText);
+    const dest = await geocodeText(toText);
+    if (!origin || !dest) { el.innerHTML = `<div class="transport-error">장소를 찾을 수 없어요. 다른 이름으로 검색해보세요.</div>`; return; }
+    el.innerHTML = '<div class="transport-loading">경로 계산 중... 🗺</div>';
+    const data = await callRoutesAPI(origin, dest, mode);
+    renderRouteResult(data, 'textRouteResult');
+  } catch(e) { el.innerHTML = `<div class="transport-error">검색 중 오류가 발생했어요.</div>`; }
+}
+
+async function searchRouteById(fromId, toId, mode) {
+  const el = document.getElementById('allDayResult');
+  el.innerHTML = '<div class="transport-loading">검색 중... 🔍</div>';
+  try {
+    const origin = await getCoordsByPlaceId(fromId);
+    const dest = await getCoordsByPlaceId(toId);
+    const data = await callRoutesAPI(origin, dest, mode);
+    renderRouteResult(data, 'allDayResult');
+  } catch(e) { el.innerHTML = `<div class="transport-error">검색 중 오류가 발생했어요.</div>`; }
+}
+
+async function searchAllDayRoutes() {
+  const items = schedule[activeDay];
+  if (items.length < 2) return;
+  const el = document.getElementById('allDayResult');
+  el.innerHTML = '<div class="transport-loading">전체 구간 검색 중... 🔍</div>';
+  let html = '<div class="transport-result">';
+  let totalSeconds = 0;
+  try {
+    for (let i = 0; i < items.length - 1; i++) {
+      const from = places.find(p => p.id === items[i].id);
+      const to = places.find(p => p.id === items[i+1].id);
+      if (!from || !to) continue;
+      const data = await callRoutesAPI({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, 'TRANSIT');
+      if (data.routes?.length) {
+        const sec = parseInt(data.routes[0].duration);
+        totalSeconds += sec;
+        const dist = formatDistance(data.routes[0].distanceMeters);
+        html += `<div class="transport-result-item">
+          <div class="transport-mode-icon">🚃</div>
+          <div class="transport-detail">
+            <div class="route-name">${from.name} → ${to.name}</div>
+            <div class="route-info">거리: ${dist}</div>
+            <div class="route-time">⏱ ${formatDuration(sec)}</div>
+          </div>
+        </div>`;
+      }
+    }
+    html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #c5dcf5;font-size:13px;font-weight:600;color:#378ADD;text-align:right;">
+      총 이동시간: ${formatDuration(totalSeconds)}
+    </div>`;
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = `<div class="transport-error">검색 중 오류가 발생했어요.</div>`; }
+}
+
+
 function renderFilter(){const fs=[{key:'all',label:'전체',color:'#888'},...Object.entries(CATS).map(([k,v])=>({key:k,label:v.label,color:v.color}))];document.getElementById('filterBar').innerHTML=fs.map(f=>`<button class="filter-btn ${activeFilter===f.key?'active':''}" onclick="setFilter('${f.key}')"><span class="dot" style="background:${f.color}"></span>${f.label}</button>`).join('');}
 function setFilter(f){activeFilter=f;renderFilter();renderMarkers();renderPlaceGrid();}
 function renderLegend(){document.getElementById('mapLegend').innerHTML=Object.entries(CATS).map(([k,v])=>`<div class="legend-item"><span class="legend-dot" style="background:${v.color}"></span>${v.label}</div>`).join('');}
