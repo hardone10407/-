@@ -633,6 +633,7 @@ function loadFromLocal() {
 // 모든 데이터 변경 후 자동저장 트리거
 function autoSave() {
   saveToLocal();
+  saveToSupabase();
 }
 
 function exportData() {
@@ -666,7 +667,6 @@ function importData(event) {
       places = data.places;
       schedule = data.schedule;
       nextId = data.nextId || 100;
-      // 지도 마커 리셋
       Object.values(markers).forEach(m=>m.remove());
       markers = {};
       renderMarkers();
@@ -674,25 +674,95 @@ function importData(event) {
       renderDayTabs();
       renderSchedule();
       renderPlaceGrid();
-      saveToLocal();
+      autoSave();
       alert('✅ 불러오기 완료!');
     } catch(e) { alert('파일을 읽는 중 오류가 발생했어요.'); }
   };
   reader.readAsText(file);
-  event.target.value = ''; // 같은 파일 재업로드 가능하게
+  event.target.value = '';
 }
 
-document.addEventListener('DOMContentLoaded',()=>{
-  const loaded = loadFromLocal();
+/* ════ SUPABASE 연동 ════ */
+const SUPABASE_URL = 'https://uylfyfhfxxgommhinenj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5bGZ5ZmhmeHhnb21taGluZW5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTI5MjYsImV4cCI6MjA5MzY2ODkyNn0.3O2cdkX8VRZy7kUmkKX_S2sQ4EwvraThIuopWZ9J3M4';
+const SB_HEADERS = {
+  'Content-Type': 'application/json',
+  'apikey': SUPABASE_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_KEY,
+  'Prefer': 'resolution=merge-duplicates'
+};
+
+async function saveToSupabase() {
+  try {
+    const payload = {
+      key: 'planner_data',
+      value: JSON.stringify({ places, schedule, nextId, savedAt: new Date().toISOString() })
+    };
+    await fetch(`${SUPABASE_URL}/rest/v1/planner?key=eq.planner_data`, {
+      method: 'DELETE', headers: SB_HEADERS
+    });
+    await fetch(`${SUPABASE_URL}/rest/v1/planner`, {
+      method: 'POST', headers: SB_HEADERS, body: JSON.stringify(payload)
+    });
+    setStatus('☁️ 클라우드 저장 완료 · ' + new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}));
+  } catch(e) {
+    setStatus('⚠️ 클라우드 저장 실패 (로컬 저장됨)');
+    console.warn('Supabase 저장 실패:', e);
+  }
+}
+
+async function loadFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/planner?key=eq.planner_data&select=value`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    const rows = await res.json();
+    if (!rows || rows.length === 0) return false;
+    const data = JSON.parse(rows[0].value);
+    if (data.places) places = data.places;
+    if (data.schedule) Object.keys(data.schedule).forEach(d => { schedule[d] = data.schedule[d] || []; });
+    if (data.nextId) nextId = data.nextId;
+    saveToLocal(); // 로컬에도 백업
+    return true;
+  } catch(e) {
+    console.warn('Supabase 불러오기 실패, 로컬에서 시도:', e);
+    return false;
+  }
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('saveStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = msg.includes('⚠️') ? '#e24b4a' : '#1D9E75';
+  setTimeout(() => { el.textContent = '핀 클릭 → 시간 설정 → Day 선택'; el.style.color = ''; }, 3000);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // 로컬 먼저 불러와서 빠르게 화면 표시
+  loadFromLocal();
   initMap();
   renderFilter();
   renderLegend();
   renderDayTabs();
   renderSchedule();
   renderPlaceGrid();
-  if (loaded) {
-    const el = document.getElementById('saveStatus');
-    if (el) { el.textContent = '💾 저장된 데이터 불러옴'; el.style.color = '#1D9E75'; setTimeout(()=>{el.textContent='핀 클릭 → 시간 설정 → Day 선택'; el.style.color='';}, 3000); }
+
+  // 그 다음 클라우드에서 최신 데이터 불러오기
+  setStatus('☁️ 클라우드에서 불러오는 중...');
+  const cloudLoaded = await loadFromSupabase();
+  if (cloudLoaded) {
+    // 클라우드 데이터로 화면 업데이트
+    Object.values(markers).forEach(m=>m.remove());
+    markers = {};
+    renderMarkers();
+    renderFilter();
+    renderDayTabs();
+    renderSchedule();
+    renderPlaceGrid();
+    setStatus('☁️ 클라우드 데이터 불러옴');
+  } else {
+    setStatus('📱 로컬 데이터 사용 중');
   }
 });
 </script>
