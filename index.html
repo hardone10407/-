@@ -390,7 +390,17 @@ function renderMarkers() {
   if(q) vis=vis.filter(p=>p.name.toLowerCase().includes(q)||p.addr.toLowerCase().includes(q));
   vis.forEach(place=>{
     const m=L.marker([place.lat,place.lng],{icon:makeIcon(place.cat)}).addTo(map);
-    m.on('click',()=>{const pt=map.latLngToContainerPoint([place.lat,place.lng]);const rect=document.getElementById('map').getBoundingClientRect();showPopup(place,rect.left+pt.x,rect.top+pt.y);});
+    m.on('click',()=>{
+      const pt=map.latLngToContainerPoint([place.lat,place.lng]);
+      const rect=document.getElementById('map').getBoundingClientRect();
+      const screenX = rect.left + pt.x;
+      const screenY = rect.top + pt.y;
+      // 지도가 스크롤로 인해 화면 밖에 있을 경우 지도 중앙 사용
+      const safeY = screenY < 60 || screenY > window.innerHeight
+        ? window.innerHeight / 2
+        : screenY;
+      showPopup(place, screenX, safeY);
+    });
     markers[place.id]=m;
   });
 }
@@ -948,7 +958,20 @@ function renderPlaceGrid(){
   if(!vis.length){document.getElementById('placeGrid').innerHTML=`<div class="no-results">저장된 장소 중 일치하는 결과가 없어요</div>`;return;}
   document.getElementById('placeGrid').innerHTML=vis.map(place=>{const c=CATS[place.cat];const nameHtml=q?highlight(place.name,searchQuery):place.name;return`<div class="place-card"><div class="pcard-icon" style="background:${c.bg};cursor:pointer" onclick="focusPlace(${place.id})">${c.icon}</div><div style="flex:1;min-width:0"><div class="pcard-name" style="cursor:pointer" onclick="focusPlace(${place.id})">${nameHtml}</div><div class="pcard-addr">${place.addr}${place.rating!=='-'?' · ⭐'+place.rating:''}</div><div class="pcard-actions"><span class="pcard-add" onclick="focusPlace(${place.id})" style="cursor:pointer">+ 추가</span><span style="color:#ddd">·</span><button class="pcard-edit" onclick="openEditModal(${place.id})">✏️ 수정</button><span style="color:#ddd">·</span><button class="pcard-delete" onclick="deletePlace(${place.id})">🗑 삭제</button></div></div></div>`;}).join('');
 }
-function focusPlace(id){const place=places.find(p=>p.id===id);if(!place)return;map.setView([place.lat,place.lng],15,{animate:true});setTimeout(()=>{const pt=map.latLngToContainerPoint([place.lat,place.lng]);const rect=document.getElementById('map').getBoundingClientRect();showPopup(place,rect.left+pt.x,rect.top+pt.y);},420);}
+function focusPlace(id){
+  const place=places.find(p=>p.id===id);if(!place)return;
+  // 먼저 지도로 스크롤
+  document.getElementById('map').scrollIntoView({behavior:'smooth', block:'center'});
+  map.setView([place.lat,place.lng],15,{animate:true});
+  setTimeout(()=>{
+    const pt=map.latLngToContainerPoint([place.lat,place.lng]);
+    const rect=document.getElementById('map').getBoundingClientRect();
+    const screenX=rect.left+pt.x;
+    const screenY=rect.top+pt.y;
+    const safeY=screenY<60||screenY>window.innerHeight ? window.innerHeight/2 : screenY;
+    showPopup(place,screenX,safeY);
+  },600);
+}
 
 /* ════ EDIT / DELETE PLACE ════ */
 function openEditModal(id) {
