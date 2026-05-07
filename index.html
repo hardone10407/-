@@ -649,10 +649,16 @@ function getDepartureTime() {
   const dateEl = document.getElementById('departDate');
   const timeEl = document.getElementById('departTime');
   const date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
-  const time = timeEl ? timeEl.value : new Date().toTimeString().slice(0,5);
-  // 일본 시간(JST = UTC+9)을 UTC로 변환
+  const time = timeEl ? timeEl.value : '09:00';
+  // 일본 시간(JST = UTC+9)으로 파싱
   const localDt = new Date(`${date}T${time}:00+09:00`);
-  return localDt.toISOString(); // e.g. "2026-05-07T03:00:00.000Z"
+  // 현재 시간보다 과거면 5분 후로 설정
+  const now = new Date();
+  if (localDt <= now) {
+    const future = new Date(now.getTime() + 5 * 60 * 1000);
+    return future.toISOString();
+  }
+  return localDt.toISOString();
 }
 
 async function callRoutesAPI(origin, destination, mode) {
