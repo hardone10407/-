@@ -448,23 +448,25 @@ function showPopup(place,px,py){
   const existingMemo=schedule[activeDay].find(s=>s.id===place.id)?.memo||'';
   const dayBtns=[1,2,3,4,5,6,7].map(d=>{const already=schedule[d].find(s=>s.id===place.id);const cnt=schedule[d].length;return`<button class="popup-day-btn ${already?'already':''}" onclick="addToDay(${place.id},${d})"><span>${already?'✓ ':''}Day ${d}${already?' (수정)':''}</span><span class="day-cnt">${cnt}개</span></button>`;}).join('');
 
-  const POPUP_W = 260;
+  const POPUP_W = 280;
   const POPUP_H = 460;
-  const MARGIN = 12;
+  const MARGIN = 16;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
 
+  // 핀 옆에 배치 시도, 안 되면 화면 중앙
   let left = px + 22;
   let top = py - 24;
 
-  // 오른쪽 벗어나면 왼쪽으로
-  if (left + POPUP_W > window.innerWidth - MARGIN) left = px - POPUP_W - 12;
-  // 왼쪽 벗어나면 보정
-  if (left < MARGIN) left = MARGIN;
-  // 아래쪽 벗어나면 위로 올리기
-  if (top + POPUP_H > window.innerHeight - MARGIN) top = window.innerHeight - POPUP_H - MARGIN;
-  // 위쪽 벗어나면 보정
+  if (left + POPUP_W > vw - MARGIN) left = px - POPUP_W - 12;
+  if (left < MARGIN) left = Math.max(MARGIN, (vw - POPUP_W) / 2);
+  if (top + POPUP_H > vh - MARGIN) top = vh - POPUP_H - MARGIN;
   if (top < 60) top = 60;
+  // 최종 안전장치 — 화면 안에 무조건 들어오게
+  left = Math.min(Math.max(left, MARGIN), vw - POPUP_W - MARGIN);
+  top  = Math.min(Math.max(top,  60),    vh - POPUP_H - MARGIN);
 
-  const style = `left:${left}px;top:${top}px;`;
+  const style = `left:${left}px;top:${top}px;width:${POPUP_W}px;`;
 
   root.innerHTML=`
     <div class="map-popup-overlay" onclick="closePopup()"></div>
