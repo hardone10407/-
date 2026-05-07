@@ -389,16 +389,9 @@ function renderMarkers() {
   if(q) vis=vis.filter(p=>p.name.toLowerCase().includes(q)||p.addr.toLowerCase().includes(q));
   vis.forEach(place=>{
     const m=L.marker([place.lat,place.lng],{icon:makeIcon(place.cat)}).addTo(map);
-    m.on('click',()=>{
-      const pt=map.latLngToContainerPoint([place.lat,place.lng]);
-      const rect=document.getElementById('map').getBoundingClientRect();
-      const screenX = rect.left + pt.x;
-      const screenY = rect.top + pt.y;
-      // 지도가 스크롤로 인해 화면 밖에 있을 경우 지도 중앙 사용
-      const safeY = screenY < 60 || screenY > window.innerHeight
-        ? window.innerHeight / 2
-        : screenY;
-      showPopup(place, screenX, safeY);
+    m.on('click',(e)=>{
+      L.DomEvent.stopPropagation(e);
+      showPopup(place, 0, 0);
     });
     markers[place.id]=m;
   });
@@ -448,7 +441,11 @@ function selectCatOpt(cat){window._extSelectedCat=cat;document.querySelectorAll(
 function closeExtModal(){document.getElementById('modalRoot').innerHTML='';if(markers['temp']){markers['temp'].remove();delete markers['temp'];}}
 function saveExtPlace(lat,lng){const name=document.getElementById('extName').value.trim();const addr=document.getElementById('extAddr').value.trim();const cat=window._extSelectedCat||'attraction';if(!name){alert('장소 이름을 입력해주세요!');return;}const np={id:nextId++,name,cat,lat,lng,addr:addr||'도쿄',rating:'-'};places.push(np);if(markers['temp']){markers['temp'].remove();delete markers['temp'];}document.getElementById('modalRoot').innerHTML='';clearSearch();renderMarkers();renderPlaceGrid();map.setView([lat,lng],15,{animate:true});autoSave();setTimeout(()=>{const pt=map.latLngToContainerPoint([lat,lng]);const rect=document.getElementById('map').getBoundingClientRect();showPopup(np,rect.left+pt.x,rect.top+pt.y);},420);}
 function onSearchKey(e){if(e.key==='Escape')clearSearch();}
-document.addEventListener('click',e=>{if(!document.getElementById('searchWrap').contains(e.target))closeDropdown();});
+document.addEventListener('click',e=>{
+  // 검색창 외부 클릭 시 드롭다운 닫기
+  if(!document.getElementById('searchWrap').contains(e.target)) closeDropdown();
+  // 팝업 외부 클릭 시 팝업 닫기 (overlay가 아닌 경우)
+});
 
 /* ════ POPUP ════ */
 function getNextTime(day){const items=schedule[day];if(!items.length)return '09:00';const[h]=items[items.length-1].time.split(':').map(Number);return String(Math.min(h+2,21)).padStart(2,'0')+':00';}
@@ -839,10 +836,9 @@ function showDayOnMap() {
     });
     const m = L.marker([place.lat, place.lng], { icon }).addTo(map);
     m.bindTooltip(`${i+1}. ${item.time} ${place.name}`, { permanent: false, direction: 'top' });
-    m.on('click', () => {
-      const pt = map.latLngToContainerPoint([place.lat, place.lng]);
-      const rect = document.getElementById('map').getBoundingClientRect();
-      showPopup(place, rect.left + pt.x, rect.top + pt.y);
+    m.on('click', (e) => {
+      L.DomEvent.stopPropagation(e);
+      showPopup(place, 0, 0);
     });
     markers[place.id] = m;
   });
