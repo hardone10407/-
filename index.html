@@ -694,6 +694,8 @@ function openAddModal(){
     </div>`;
 }
 
+const GOOGLE_API_KEY = 'AIzaSyDbsNoU0ZV42sgCUdvhEAdIGWhsSeqJ_nk';
+
 let addSearchTimer = null;
 function searchAddPlace(val) {
   clearTimeout(addSearchTimer);
@@ -703,21 +705,40 @@ function searchAddPlace(val) {
   results.innerHTML='<div style="padding:12px;font-size:12px;color:#aaa;text-align:center;">검색 중...</div>';
   addSearchTimer = setTimeout(async () => {
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val+' Tokyo Japan')}&format=json&limit=6&countrycodes=jp&accept-language=ko`;
-      const res = await fetch(url);
+      const res = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_API_KEY,
+          'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.id'
+        },
+        body: JSON.stringify({
+          textQuery: val + ' 도쿄',
+          languageCode: 'ko',
+          locationBias: {
+            circle: {
+              center: { latitude: 35.6892, longitude: 139.6921 },
+              radius: 50000
+            }
+          }
+        })
+      });
       const data = await res.json();
-      if (!data.length) {
+      if (!data.places || !data.places.length) {
         results.innerHTML='<div style="padding:12px;font-size:12px;color:#aaa;text-align:center;">결과가 없어요. 다른 이름으로 검색해보세요.</div>';
         return;
       }
-      results.innerHTML = data.map((r,i) => {
-        const name = r.display_name.split(',')[0].trim();
-        const addr = r.display_name.split(',').slice(1,4).join(',').trim();
-        return `<div onclick="selectAddPlace('${name.replace(/'/g,"\\'")}','${addr.replace(/'/g,"\\'")}',${r.lat},${r.lon})"
+      results.innerHTML = data.places.map((p) => {
+        const name = p.displayName?.text || '';
+        const addr = p.formattedAddress || '';
+        const lat = p.location?.latitude;
+        const lng = p.location?.longitude;
+        const shortAddr = addr.split(' ').slice(0,4).join(' ');
+        return `<div onclick="selectAddPlace('${name.replace(/'/g,"\\'")}','${shortAddr.replace(/'/g,"\\'")}',${lat},${lng})"
           style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f5f3f0;transition:background 0.1s;"
           onmouseover="this.style.background='#f5fbf8'" onmouseout="this.style.background='#fff'">
           <div style="font-size:13px;font-weight:500;color:#1a1a1a;">${name}</div>
-          <div style="font-size:11px;color:#999;margin-top:2px;">${addr}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px;">${shortAddr}</div>
         </div>`;
       }).join('');
     } catch(e) {
