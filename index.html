@@ -549,6 +549,21 @@ function openTransportModal() {
           <button onclick="closeModal()" style="background:none;border:none;font-size:20px;color:#bbb;cursor:pointer;">×</button>
         </div>
 
+        <!-- 날짜/시간 설정 -->
+        <div class="transport-section">
+          <h4>📅 출발 날짜 · 시간 설정</h4>
+          <div class="transport-row" style="gap:10px;">
+            <div style="flex:1">
+              <div style="font-size:11px;color:#888;margin-bottom:4px;">날짜</div>
+              <input class="transport-input" type="date" id="departDate" style="width:100%" value="${new Date().toISOString().split('T')[0]}" />
+            </div>
+            <div style="flex:1">
+              <div style="font-size:11px;color:#888;margin-bottom:4px;">시간</div>
+              <input class="transport-input" type="time" id="departTime" style="width:100%" value="${new Date().toTimeString().slice(0,5)}" />
+            </div>
+          </div>
+        </div>
+
         <!-- A. 장소 간 경로 검색 -->
         <div class="transport-section">
           <h4>📍 장소 간 경로 검색</h4>
@@ -630,27 +645,46 @@ async function geocodeText(text) {
   return { lat: p.location.latitude, lng: p.location.longitude, name: p.displayName.text };
 }
 
+function getDepartureTime() {
+  const dateEl = document.getElementById('departDate');
+  const timeEl = document.getElementById('departTime');
+  const date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+  const time = timeEl ? timeEl.value : new Date().toTimeString().slice(0,5);
+  // 일본 시간(JST = UTC+9)을 UTC로 변환
+  const localDt = new Date(`${date}T${time}:00+09:00`);
+  return localDt.toISOString(); // e.g. "2026-05-07T03:00:00.000Z"
+}
+
 async function callRoutesAPI(origin, destination, mode) {
-  const modeMap = { TRANSIT: 'TRANSIT', WALK: 'WALK', DRIVE: 'DRIVE' };
+  const departureTime = getDepartureTime();
   const body = {
     origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
     destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
-    travelMode: modeMap[mode] || 'TRANSIT',
+    travelMode: mode || 'TRANSIT',
     languageCode: 'ko',
-    computeAlternativeRoutes: false
+    computeAlternativeRoutes: false,
   };
-  if (mode === 'TRANSIT') body.transitPreferences = { routingPreference: 'LESS_WALKING' };
+
+  if (mode === 'TRANSIT') {
+    body.departureTime = departureTime;
+    body.transitPreferences = { routingPreference: 'LESS_WALKING' };
+  } else if (mode === 'DRIVE') {
+    body.departureTime = departureTime;
+    body.routingPreference = 'TRAFFIC_AWARE';
+  }
 
   const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': GOOGLE_API_KEY,
-      'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.legs,routes.description'
+      'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.description,routes.legs.steps.transitDetails'
     },
     body: JSON.stringify(body)
   });
-  return await res.json();
+  const data = await res.json();
+  if (data.error) console.warn('Routes API 오류:', data.error);
+  return data;
 }
 
 function formatDuration(seconds) {
