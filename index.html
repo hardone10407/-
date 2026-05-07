@@ -15,6 +15,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .topbar-sub { font-size: 12px; color: #888; margin-top: 1px; }
 .add-top-btn { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 20px; border: 1.5px solid #1D9E75; background: transparent; font-size: 13px; font-weight: 500; color: #1D9E75; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
 .add-top-btn:hover { background: #1D9E75; color: white; }
+.topbar-icon-btn { display: flex; align-items: center; gap: 5px; padding: 7px 13px; border-radius: 20px; border: 1px solid #e5e3de; background: #fff; font-size: 12px; color: #555; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.topbar-icon-btn:hover { border-color: #1D9E75; color: #1D9E75; background: #f0faf6; }
 
 .main { max-width: 1000px; margin: 0 auto; padding: 24px 20px; }
 .section-label { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; }
@@ -176,10 +178,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="topbar-left">
     <div>
       <div class="topbar-title">🗾 도쿄 여행 플래너</div>
-      <div class="topbar-sub">핀 클릭 → 시간 설정 → Day 선택</div>
+      <div class="topbar-sub" id="saveStatus">핀 클릭 → 시간 설정 → Day 선택</div>
     </div>
   </div>
-  <button class="add-top-btn" onclick="openAddModal()">+ 장소 추가</button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="topbar-icon-btn" onclick="exportData()" title="파일로 내보내기">⬇ 내보내기</button>
+    <label class="topbar-icon-btn" title="파일 불러오기" style="cursor:pointer;">
+      ⬆ 불러오기
+      <input type="file" accept=".json" onchange="importData(event)" style="display:none" />
+    </label>
+    <button class="add-top-btn" onclick="openAddModal()">+ 장소 추가</button>
+  </div>
 </div>
 
 <div class="main">
@@ -368,7 +377,7 @@ function showNewExtModal(name,addr,lat,lng){
 }
 function selectCatOpt(cat){window._extSelectedCat=cat;document.querySelectorAll('.cat-option').forEach(el=>el.classList.remove('selected'));document.getElementById('co_'+cat).classList.add('selected');}
 function closeExtModal(){document.getElementById('modalRoot').innerHTML='';if(markers['temp']){markers['temp'].remove();delete markers['temp'];}}
-function saveExtPlace(lat,lng){const name=document.getElementById('extName').value.trim();const addr=document.getElementById('extAddr').value.trim();const cat=window._extSelectedCat||'attraction';if(!name){alert('장소 이름을 입력해주세요!');return;}const np={id:nextId++,name,cat,lat,lng,addr:addr||'도쿄',rating:'-'};places.push(np);if(markers['temp']){markers['temp'].remove();delete markers['temp'];}document.getElementById('modalRoot').innerHTML='';clearSearch();renderMarkers();renderPlaceGrid();map.setView([lat,lng],15,{animate:true});setTimeout(()=>{const pt=map.latLngToContainerPoint([lat,lng]);const rect=document.getElementById('map').getBoundingClientRect();showPopup(np,rect.left+pt.x,rect.top+pt.y);},420);}
+function saveExtPlace(lat,lng){const name=document.getElementById('extName').value.trim();const addr=document.getElementById('extAddr').value.trim();const cat=window._extSelectedCat||'attraction';if(!name){alert('장소 이름을 입력해주세요!');return;}const np={id:nextId++,name,cat,lat,lng,addr:addr||'도쿄',rating:'-'};places.push(np);if(markers['temp']){markers['temp'].remove();delete markers['temp'];}document.getElementById('modalRoot').innerHTML='';clearSearch();renderMarkers();renderPlaceGrid();map.setView([lat,lng],15,{animate:true});autoSave();setTimeout(()=>{const pt=map.latLngToContainerPoint([lat,lng]);const rect=document.getElementById('map').getBoundingClientRect();showPopup(np,rect.left+pt.x,rect.top+pt.y);},420);}
 function onSearchKey(e){if(e.key==='Escape')clearSearch();}
 document.addEventListener('click',e=>{if(!document.getElementById('searchWrap').contains(e.target))closeDropdown();});
 
@@ -419,11 +428,11 @@ function addToDay(placeId,day){
   if(existing){existing.time=time;existing.memo=memo;}
   else schedule[day].push({id:placeId,name:place.name,cat:place.cat,time,memo});
   schedule[day].sort((a,b)=>a.time.localeCompare(b.time));
-  closePopup();activeDay=day;renderDayTabs();renderSchedule();
+  closePopup();activeDay=day;renderDayTabs();renderSchedule();autoSave();
 }
-function removeFromDay(placeId,day){schedule[day]=schedule[day].filter(s=>s.id!==placeId);renderSchedule();renderDayTabs();}
-function updateTime(placeId,day,newTime){const item=schedule[day].find(s=>s.id===placeId);if(!item)return;item.time=newTime;schedule[day].sort((a,b)=>a.time.localeCompare(b.time));renderSchedule();}
-function updateMemo(placeId,day,newMemo){const item=schedule[day].find(s=>s.id===placeId);if(!item)return;item.memo=newMemo;}
+function removeFromDay(placeId,day){schedule[day]=schedule[day].filter(s=>s.id!==placeId);renderSchedule();renderDayTabs();autoSave();}
+function updateTime(placeId,day,newTime){const item=schedule[day].find(s=>s.id===placeId);if(!item)return;item.time=newTime;schedule[day].sort((a,b)=>a.time.localeCompare(b.time));renderSchedule();autoSave();}
+function updateMemo(placeId,day,newMemo){const item=schedule[day].find(s=>s.id===placeId);if(!item)return;item.memo=newMemo;autoSave();}
 
 function editMemoInline(placeId,day,el){
   const item=schedule[day].find(s=>s.id===placeId);if(!item)return;
@@ -435,9 +444,9 @@ function editMemoInline(placeId,day,el){
   ta.focus();
   ta.addEventListener('blur',()=>{
     item.memo=ta.value.trim();
-    renderSchedule();
+    renderSchedule();autoSave();
   });
-  ta.addEventListener('keydown',e=>{if(e.key==='Escape'){item.memo=ta.value.trim();renderSchedule();}});
+  ta.addEventListener('keydown',e=>{if(e.key==='Escape'){item.memo=ta.value.trim();renderSchedule();autoSave();}});
 }
 
 /* ════ FILTER ════ */
@@ -553,13 +562,11 @@ function saveEdit(id) {
   const rating = document.getElementById('editRating').value.trim();
   if (!name||!cat||isNaN(lat)||isNaN(lng)){alert('이름, 카테고리, 위도, 경도를 입력해주세요!');return;}
   place.name=name; place.addr=addr; place.cat=cat; place.lat=lat; place.lng=lng; place.rating=rating||'-';
-  // update schedule names too
   Object.values(schedule).forEach(day=>day.forEach(s=>{if(s.id===id){s.name=name;s.cat=cat;}}));
   closeModal();
-  renderMarkers();
-  renderPlaceGrid();
-  renderSchedule();
+  renderMarkers();renderPlaceGrid();renderSchedule();
   map.setView([lat,lng],15,{animate:true});
+  autoSave();
 }
 
 function deletePlace(id) {
@@ -568,18 +575,126 @@ function deletePlace(id) {
   if (!confirm(`"${place.name}"을(를) 삭제할까요?\n일정에 추가된 항목도 함께 삭제됩니다.`)) return;
   places = places.filter(p=>p.id!==id);
   Object.keys(schedule).forEach(d=>{schedule[d]=schedule[d].filter(s=>s.id!==id);});
-  renderMarkers();
-  renderPlaceGrid();
-  renderSchedule();
-  renderDayTabs();
+  renderMarkers();renderPlaceGrid();renderSchedule();renderDayTabs();
+  autoSave();
 }
 
 /* ════ ADD MODAL ════ */
 function openAddModal(){document.getElementById('modalRoot').innerHTML=`<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><h3>새 장소 직접 추가</h3><p class="modal-hint">위도/경도는 구글 맵에서 장소를 우클릭 → 첫 번째 숫자 줄을 복사하면 돼요.</p><input type="text" id="newName" placeholder="장소 이름 (예: 이케부쿠로 선샤인시티)" /><input type="text" id="newAddr" placeholder="지역 (예: 이케부쿠로)" /><select id="newCat"><option value="">카테고리 선택</option>${Object.entries(CATS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select><input type="number" id="newLat" placeholder="위도 (예: 35.7295)" step="0.0001" /><input type="number" id="newLng" placeholder="경도 (예: 139.7109)" step="0.0001" /><div class="modal-actions"><button class="btn-secondary" onclick="closeModal()">취소</button><button class="btn-primary" onclick="savePlace()">추가하기</button></div></div></div>`;}
 function closeModal(){document.getElementById('modalRoot').innerHTML='';}
-function savePlace(){const name=document.getElementById('newName').value.trim();const addr=document.getElementById('newAddr').value.trim();const cat=document.getElementById('newCat').value;const lat=parseFloat(document.getElementById('newLat').value);const lng=parseFloat(document.getElementById('newLng').value);if(!name||!cat||isNaN(lat)||isNaN(lng)){alert('이름, 카테고리, 위도, 경도를 모두 입력해주세요!');return;}places.push({id:nextId++,name,cat,lat,lng,addr:addr||'도쿄',rating:'-'});closeModal();renderMarkers();renderPlaceGrid();map.setView([lat,lng],15,{animate:true});}
+function savePlace(){const name=document.getElementById('newName').value.trim();const addr=document.getElementById('newAddr').value.trim();const cat=document.getElementById('newCat').value;const lat=parseFloat(document.getElementById('newLat').value);const lng=parseFloat(document.getElementById('newLng').value);if(!name||!cat||isNaN(lat)||isNaN(lng)){alert('이름, 카테고리, 위도, 경도를 모두 입력해주세요!');return;}places.push({id:nextId++,name,cat,lat,lng,addr:addr||'도쿄',rating:'-'});closeModal();renderMarkers();renderPlaceGrid();map.setView([lat,lng],15,{animate:true});autoSave();}
 
-document.addEventListener('DOMContentLoaded',()=>{initMap();renderFilter();renderLegend();renderDayTabs();renderSchedule();renderPlaceGrid();});
+/* ════ 저장 / 불러오기 ════ */
+
+const STORAGE_KEY = 'tokyo_planner_v1';
+const DEFAULT_PLACE_IDS = new Set([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38]);
+
+function saveToLocal() {
+  // 기본 장소는 제외하고 사용자가 추가한 장소 + 일정만 저장
+  const userPlaces = places.filter(p => !DEFAULT_PLACE_IDS.has(p.id));
+  // 기본 장소 중 수정된 것도 저장
+  const editedDefaults = places.filter(p => DEFAULT_PLACE_IDS.has(p.id));
+  const data = {
+    places: editedDefaults.concat(userPlaces),
+    schedule,
+    nextId,
+    savedAt: new Date().toISOString()
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const el = document.getElementById('saveStatus');
+    if (el) {
+      el.textContent = '✅ 자동 저장됨 · ' + new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+      el.style.color = '#1D9E75';
+      setTimeout(() => { el.textContent = '핀 클릭 → 시간 설정 → Day 선택'; el.style.color = ''; }, 3000);
+    }
+  } catch(e) { console.warn('저장 실패:', e); }
+}
+
+function loadFromLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (data.places) {
+      // 저장된 장소로 전체 교체
+      places = data.places;
+    }
+    if (data.schedule) {
+      Object.keys(data.schedule).forEach(d => {
+        schedule[d] = data.schedule[d] || [];
+      });
+    }
+    if (data.nextId) nextId = data.nextId;
+    return true;
+  } catch(e) { console.warn('불러오기 실패:', e); return false; }
+}
+
+// 모든 데이터 변경 후 자동저장 트리거
+function autoSave() {
+  saveToLocal();
+}
+
+function exportData() {
+  const data = {
+    version: 1,
+    title: '도쿄 여행 플래너',
+    exportedAt: new Date().toISOString(),
+    places,
+    schedule,
+    nextId
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const date = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+  a.download = `도쿄여행플래너_${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.places || !data.schedule) { alert('올바른 플래너 파일이 아니에요!'); return; }
+      if (!confirm('현재 데이터를 불러온 파일로 덮어쓸까요?')) return;
+      places = data.places;
+      schedule = data.schedule;
+      nextId = data.nextId || 100;
+      // 지도 마커 리셋
+      Object.values(markers).forEach(m=>m.remove());
+      markers = {};
+      renderMarkers();
+      renderFilter();
+      renderDayTabs();
+      renderSchedule();
+      renderPlaceGrid();
+      saveToLocal();
+      alert('✅ 불러오기 완료!');
+    } catch(e) { alert('파일을 읽는 중 오류가 발생했어요.'); }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // 같은 파일 재업로드 가능하게
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const loaded = loadFromLocal();
+  initMap();
+  renderFilter();
+  renderLegend();
+  renderDayTabs();
+  renderSchedule();
+  renderPlaceGrid();
+  if (loaded) {
+    const el = document.getElementById('saveStatus');
+    if (el) { el.textContent = '💾 저장된 데이터 불러옴'; el.style.color = '#1D9E75'; setTimeout(()=>{el.textContent='핀 클릭 → 시간 설정 → Day 선택'; el.style.color='';}, 3000); }
+  }
+});
 </script>
 </body>
 </html>
