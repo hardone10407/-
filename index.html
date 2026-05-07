@@ -211,7 +211,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="map-container">
     <div id="map"></div>
     <div class="map-legend" id="mapLegend"></div>
-    <div class="map-hint">📍 핀 클릭 → 시간 설정 → Day 선택</div>
+    <div class="map-hint" id="mapHint">📍 핀 클릭 → 시간 설정 → Day 선택</div>
+    <div id="mapModeBar" style="display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.95);border:1px solid #e5e3de;border-radius:20px;padding:6px 14px;font-size:12px;color:#1D9E75;font-weight:600;z-index:100;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+      📅 <span id="mapModeLabel">Day 1</span> 일정만 표시 중
+      <button onclick="clearDayMapMode()" style="margin-left:8px;background:none;border:none;color:#aaa;cursor:pointer;font-size:13px;line-height:1;">×</button>
+    </div>
   </div>
 
   <div class="timetable-wrap">
@@ -220,7 +224,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <div class="day-card">
       <div class="day-card-header">
         <span class="dlabel" id="activeDayLabel">Day 1</span>
-        <span class="dcnt" id="activeDayCnt">0개 장소</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="showDayMapBtn" onclick="showDayOnMap()" style="font-size:11px;padding:5px 12px;border-radius:14px;border:1px solid #1D9E75;background:transparent;color:#1D9E75;cursor:pointer;transition:all 0.15s;white-space:nowrap;" onmouseover="this.style.background='#1D9E75';this.style.color='white'" onmouseout="this.style.background='transparent';this.style.color='#1D9E75'">🗺 지도에 표시</button>
+          <span class="dcnt" id="activeDayCnt">0개 장소</span>
+        </div>
       </div>
       <div id="scheduleBody"></div>
     </div>
@@ -454,7 +461,72 @@ function renderFilter(){const fs=[{key:'all',label:'전체',color:'#888'},...Obj
 function setFilter(f){activeFilter=f;renderFilter();renderMarkers();renderPlaceGrid();}
 function renderLegend(){document.getElementById('mapLegend').innerHTML=Object.entries(CATS).map(([k,v])=>`<div class="legend-item"><span class="legend-dot" style="background:${v.color}"></span>${v.label}</div>`).join('');}
 
-/* ════ DAY TABS ════ */
+/* ════ DAY MAP MODE ════ */
+let dayMapMode = false;
+
+function showDayOnMap() {
+  const items = schedule[activeDay];
+  if (!items.length) { alert(`Day ${activeDay}에 추가된 장소가 없어요!`); return; }
+
+  // 기존 마커 제거
+  Object.values(markers).forEach(m => m.remove());
+  markers = {};
+
+  // Day 일정 장소만 마커 표시 + 순서 번호 표시
+  items.forEach((item, i) => {
+    const place = places.find(p => p.id === item.id);
+    if (!place) return;
+    const c = CATS[place.cat];
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="position:relative">
+        <div style="background:${c.color};color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${c.icon}</div>
+        <div style="position:absolute;top:-6px;right:-6px;background:#1a1a1a;color:white;width:16px;height:16px;border-radius:50%;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid white;">${i+1}</div>
+      </div>`,
+      iconSize: [32, 32], iconAnchor: [16, 16]
+    });
+    const m = L.marker([place.lat, place.lng], { icon }).addTo(map);
+    m.bindTooltip(`${i+1}. ${item.time} ${place.name}`, { permanent: false, direction: 'top' });
+    m.on('click', () => {
+      const pt = map.latLngToContainerPoint([place.lat, place.lng]);
+      const rect = document.getElementById('map').getBoundingClientRect();
+      showPopup(place, rect.left + pt.x, rect.top + pt.y);
+    });
+    markers[place.id] = m;
+  });
+
+  // 경로 선 그리기
+  if (window._dayPolyline) { window._dayPolyline.remove(); window._dayPolyline = null; }
+  const coords = items.map(item => {
+    const p = places.find(p => p.id === item.id);
+    return p ? [p.lat, p.lng] : null;
+  }).filter(Boolean);
+  if (coords.length > 1) {
+    window._dayPolyline = L.polyline(coords, {
+      color: '#1D9E75', weight: 2.5, opacity: 0.6, dashArray: '6,6'
+    }).addTo(map);
+  }
+
+  // 지도 범위를 해당 장소들에 맞춤
+  const group = L.featureGroup(Object.values(markers));
+  map.fitBounds(group.getBounds().pad(0.2));
+
+  // UI 업데이트
+  dayMapMode = true;
+  document.getElementById('mapModeBar').style.display = 'block';
+  document.getElementById('mapModeLabel').textContent = `Day ${activeDay}`;
+  document.getElementById('mapHint').style.display = 'none';
+  document.getElementById('mapLegend').style.display = 'none';
+}
+
+function clearDayMapMode() {
+  dayMapMode = false;
+  if (window._dayPolyline) { window._dayPolyline.remove(); window._dayPolyline = null; }
+  document.getElementById('mapModeBar').style.display = 'none';
+  document.getElementById('mapHint').style.display = 'block';
+  document.getElementById('mapLegend').style.display = 'block';
+  renderMarkers(); // 전체 마커 복원
+}
 function renderDayTabs(){
   document.getElementById('dayTabs').innerHTML=Array.from({length:7},(_,i)=>i+1).map(d=>{
     const items=schedule[d];
@@ -471,7 +543,7 @@ function renderDayTabs(){
     </button>`;
   }).join('');
 }
-function switchDay(d){activeDay=d;renderDayTabs();renderSchedule();}
+function switchDay(d){ activeDay=d; renderDayTabs(); renderSchedule(); if(dayMapMode) showDayOnMap(); }
 
 /* ════ TIMELINE ════ */
 function renderSchedule(){
@@ -580,9 +652,111 @@ function deletePlace(id) {
 }
 
 /* ════ ADD MODAL ════ */
-function openAddModal(){document.getElementById('modalRoot').innerHTML=`<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()"><h3>새 장소 직접 추가</h3><p class="modal-hint">위도/경도는 구글 맵에서 장소를 우클릭 → 첫 번째 숫자 줄을 복사하면 돼요.</p><input type="text" id="newName" placeholder="장소 이름 (예: 이케부쿠로 선샤인시티)" /><input type="text" id="newAddr" placeholder="지역 (예: 이케부쿠로)" /><select id="newCat"><option value="">카테고리 선택</option>${Object.entries(CATS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select><input type="number" id="newLat" placeholder="위도 (예: 35.7295)" step="0.0001" /><input type="number" id="newLng" placeholder="경도 (예: 139.7109)" step="0.0001" /><div class="modal-actions"><button class="btn-secondary" onclick="closeModal()">취소</button><button class="btn-primary" onclick="savePlace()">추가하기</button></div></div></div>`;}
+function openAddModal(){
+  const catOpts = Object.entries(CATS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('');
+  document.getElementById('modalRoot').innerHTML=`
+    <div class="modal-overlay" onclick="closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>새 장소 추가</h3>
+
+        <div style="position:relative;margin-bottom:10px;">
+          <input type="text" id="addSearchInput"
+            placeholder="🔍 장소 이름으로 검색 (예: 이케부쿠로 선샤인시티)"
+            oninput="searchAddPlace(this.value)"
+            autocomplete="off"
+            style="width:100%;padding:9px 12px;border:1.5px solid #1D9E75;border-radius:8px;font-size:13px;outline:none;" />
+          <div id="addSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e5e3de;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.1);z-index:10;max-height:200px;overflow-y:auto;margin-top:4px;"></div>
+        </div>
+
+        <div id="addFormFields" style="display:none;">
+          <div style="background:#f0faf6;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#0F6E56;">
+            ✅ <span id="addSelectedName">장소 선택됨</span>
+            <button onclick="resetAddForm()" style="float:right;background:none;border:none;color:#aaa;cursor:pointer;font-size:12px;">다시 검색</button>
+          </div>
+          <input type="text" id="newName" placeholder="장소 이름" />
+          <input type="text" id="newAddr" placeholder="지역" />
+          <select id="newCat">
+            <option value="">카테고리 선택</option>
+            ${catOpts}
+          </select>
+          <input type="number" id="newLat" placeholder="위도" step="0.0001" style="display:none" />
+          <input type="number" id="newLng" placeholder="경도" step="0.0001" style="display:none" />
+          <div class="modal-actions">
+            <button class="btn-secondary" onclick="closeModal()">취소</button>
+            <button class="btn-primary" onclick="savePlace()">추가하기</button>
+          </div>
+        </div>
+
+        <div class="modal-actions" id="addCancelOnly">
+          <button class="btn-secondary" onclick="closeModal()">취소</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+let addSearchTimer = null;
+function searchAddPlace(val) {
+  clearTimeout(addSearchTimer);
+  const results = document.getElementById('addSearchResults');
+  if (!val.trim()) { results.style.display='none'; return; }
+  results.style.display='block';
+  results.innerHTML='<div style="padding:12px;font-size:12px;color:#aaa;text-align:center;">검색 중...</div>';
+  addSearchTimer = setTimeout(async () => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val+' Tokyo Japan')}&format=json&limit=6&countrycodes=jp&accept-language=ko`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.length) {
+        results.innerHTML='<div style="padding:12px;font-size:12px;color:#aaa;text-align:center;">결과가 없어요. 다른 이름으로 검색해보세요.</div>';
+        return;
+      }
+      results.innerHTML = data.map((r,i) => {
+        const name = r.display_name.split(',')[0].trim();
+        const addr = r.display_name.split(',').slice(1,4).join(',').trim();
+        return `<div onclick="selectAddPlace('${name.replace(/'/g,"\\'")}','${addr.replace(/'/g,"\\'")}',${r.lat},${r.lon})"
+          style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f5f3f0;transition:background 0.1s;"
+          onmouseover="this.style.background='#f5fbf8'" onmouseout="this.style.background='#fff'">
+          <div style="font-size:13px;font-weight:500;color:#1a1a1a;">${name}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px;">${addr}</div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      results.innerHTML='<div style="padding:12px;font-size:12px;color:#e24b4a;text-align:center;">검색 중 오류가 발생했어요.</div>';
+    }
+  }, 400);
+}
+
+function selectAddPlace(name, addr, lat, lng) {
+  document.getElementById('addSearchResults').style.display='none';
+  document.getElementById('addFormFields').style.display='block';
+  document.getElementById('addCancelOnly').style.display='none';
+  document.getElementById('addSelectedName').textContent = name;
+  document.getElementById('newName').value = name;
+  document.getElementById('newAddr').value = addr.split(',')[0].trim() || '도쿄';
+  document.getElementById('newLat').value = parseFloat(lat).toFixed(6);
+  document.getElementById('newLng').value = parseFloat(lng).toFixed(6);
+}
+
+function resetAddForm() {
+  document.getElementById('addFormFields').style.display='none';
+  document.getElementById('addCancelOnly').style.display='flex';
+  document.getElementById('addSearchInput').value='';
+  document.getElementById('addSearchResults').style.display='none';
+  document.getElementById('addSearchInput').focus();
+}
+
 function closeModal(){document.getElementById('modalRoot').innerHTML='';}
-function savePlace(){const name=document.getElementById('newName').value.trim();const addr=document.getElementById('newAddr').value.trim();const cat=document.getElementById('newCat').value;const lat=parseFloat(document.getElementById('newLat').value);const lng=parseFloat(document.getElementById('newLng').value);if(!name||!cat||isNaN(lat)||isNaN(lng)){alert('이름, 카테고리, 위도, 경도를 모두 입력해주세요!');return;}places.push({id:nextId++,name,cat,lat,lng,addr:addr||'도쿄',rating:'-'});closeModal();renderMarkers();renderPlaceGrid();map.setView([lat,lng],15,{animate:true});autoSave();}
+function savePlace(){
+  const name=document.getElementById('newName').value.trim();
+  const addr=document.getElementById('newAddr').value.trim();
+  const cat=document.getElementById('newCat').value;
+  const lat=parseFloat(document.getElementById('newLat').value);
+  const lng=parseFloat(document.getElementById('newLng').value);
+  if(!name||!cat||isNaN(lat)||isNaN(lng)){alert('이름과 카테고리를 선택해주세요!');return;}
+  places.push({id:nextId++,name,cat,lat,lng,addr:addr||'도쿄',rating:'-'});
+  closeModal();renderMarkers();renderPlaceGrid();
+  map.setView([lat,lng],15,{animate:true});autoSave();
+}
 
 /* ════ 저장 / 불러오기 ════ */
 
