@@ -304,7 +304,7 @@ let places = [
   { id:17, name:'니혼바시 미쓰코시 본점',   cat:'shopping',   lat:35.6856, lng:139.7734, addr:'니혼바시', rating:4.1 },
   { id:18, name:'긴자 미쓰코시',            cat:'shopping',   lat:35.6713, lng:139.7657, addr:'긴자', rating:4.1 },
   { id:19, name:'코레도 무로마치 1',        cat:'shopping',   lat:35.6865, lng:139.7740, addr:'니혼바시', rating:3.9 },
-  { id:20, name:'teamLab Borderless: MORI Building DIGITAL ART MUSEUM', cat:'attraction', lat:35.6615, lng:139.7408, addr:'아자부다이 힐즈 B1', rating:4.6 },
+  { id:20, name:'teamLab Borderless: MORI Building DIGITAL ART MUSEUM', cat:'attraction', lat:35.6621, lng:139.7433, addr:'아자부다이 힐즈 B1', rating:4.6 },
   { id:38, name:'ART AQUARIUM MUSEUM', cat:'attraction', lat:35.6714, lng:139.7657, addr:'긴자 미쓰코시 9F', rating:4.1 },
 
   // 관광명소
@@ -334,12 +334,12 @@ let places = [
 
   // ── 새 장소 추가 ──
   { id:39, name:'네즈미술관',                     cat:'attraction', lat:35.6655, lng:139.7155, addr:'미나미아오야마', rating:4.5 },
-  { id:40, name:'네즈카페',                       cat:'restaurant', lat:35.6656, lng:139.7156, addr:'미나미아오야마', rating:4.0 },
+  { id:40, name:'네즈카페',                       cat:'restaurant', lat:35.6619, lng:139.7175, addr:'미나미아오야마', rating:4.0 },
   { id:41, name:'the Folks',                     cat:'attraction', lat:35.6582, lng:139.7019, addr:'시부야', rating:3.5 },
   { id:42, name:'긴자 츠타야 서점',               cat:'shopping',   lat:35.6697, lng:139.7641, addr:'긴자', rating:4.3 },
   { id:43, name:'신주쿠 타츠키치 히비야점',       cat:'restaurant', lat:35.6736, lng:139.7597, addr:'히비야', rating:4.4 },
   { id:44, name:'타츠키치 신주쿠본점',            cat:'restaurant', lat:35.6905, lng:139.7008, addr:'신주쿠', rating:4.5 },
-  { id:45, name:'스타벅스 리저브 로스터리 도쿄',  cat:'restaurant', lat:35.6530, lng:139.7032, addr:'나카메구로', rating:4.5 },
+  { id:45, name:'스타벅스 리저브 로스터리 도쿄',  cat:'restaurant', lat:35.6493, lng:139.6926, addr:'나카메구로', rating:4.5 },
   { id:46, name:'라포레 하라주쿠',                cat:'shopping',   lat:35.6701, lng:139.7026, addr:'하라주쿠', rating:4.0 },
   { id:47, name:'수프카레 SAMA 메이지진구마에점',  cat:'restaurant', lat:35.6702, lng:139.7040, addr:'하라주쿠', rating:4.2 },
   { id:48, name:'니혼바시 다카시마야 S.C.',       cat:'shopping',   lat:35.6823, lng:139.7740, addr:'니혼바시', rating:4.1 },
@@ -374,7 +374,7 @@ let searchAbort = null;
 const DEFAULT_SCHEDULE = {
   1: [
     { id:15, name:'나리타 공항',                      cat:'transport',  time:'13:00', memo:'도착 후 나리타 익스프레스 탑승' },
-    { id:13, name:'도미 인 도쿄 코덴마',               cat:'hotel',      time:'16:00', memo:'체크인 후 짐 풀기' },
+    { id:35, name:'미쓰이 가든 호텔 니혼바시 프리미어', cat:'hotel',     time:'16:00', memo:'체크인 후 짐 풀기' },
     { id:17, name:'니혼바시 미쓰코시 본점',            cat:'shopping',   time:'17:30', memo:'코레도 무로마치도 함께 구경' },
     { id:61, name:'초지한 니혼바시 본점',              cat:'restaurant', time:'19:30', memo:'웨이팅 있음, 일찍 줄 서기' },
   ],
@@ -889,8 +889,29 @@ function showDayOnMap() {
   }
 
   // 지도 범위를 해당 장소들에 맞춤
-  const group = L.featureGroup(Object.values(markers));
-  map.fitBounds(group.getBounds().pad(0.2));
+  // 나리타 공항처럼 멀리 떨어진 교통 장소는 줌 계산에서 제외
+  const TOKYO_CENTER = { lat: 35.6892, lng: 139.6917 };
+  const MAX_DIST_KM = 20; // 도쿄 중심에서 20km 이내 장소만 줌 계산에 사용
+
+  function distKm(a, b) {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLng = (b.lng - a.lng) * Math.PI / 180;
+    const x = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(a.lat * Math.PI/180) * Math.cos(b.lat * Math.PI/180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+  }
+
+  const tokyoMarkers = Object.entries(markers).filter(([id, m]) => {
+    const place = places.find(p => p.id === parseInt(id));
+    if (!place) return false;
+    return distKm(TOKYO_CENTER, { lat: place.lat, lng: place.lng }) <= MAX_DIST_KM;
+  }).map(([, m]) => m);
+
+  const targetMarkers = tokyoMarkers.length >= 1 ? tokyoMarkers : Object.values(markers);
+  const group = L.featureGroup(targetMarkers);
+  map.fitBounds(group.getBounds().pad(0.25), { maxZoom: 14 });
 
   // UI 업데이트
   dayMapMode = true;
