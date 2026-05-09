@@ -368,6 +368,38 @@ let searchTimer = null;
 let extResults = [];
 let searchAbort = null;
 
+// ── 4일 여행 플랜 기본 일정 ──
+// 로컬/클라우드 저장 데이터가 없을 때만 적용됨
+const DEFAULT_SCHEDULE = {
+  1: [
+    { id:15, name:'나리타 공항',                      cat:'transport',  time:'13:00', memo:'도착 후 나리타 익스프레스 탑승' },
+    { id:13, name:'도미 인 도쿄 코덴마',               cat:'hotel',      time:'16:00', memo:'체크인 후 짐 풀기' },
+    { id:17, name:'니혼바시 미쓰코시 본점',            cat:'shopping',   time:'17:30', memo:'코레도 무로마치도 함께 구경' },
+    { id:61, name:'초지한 니혼바시 본점',              cat:'restaurant', time:'19:30', memo:'웨이팅 있음, 일찍 줄 서기' },
+  ],
+  2: [
+    { id:9,  name:'센소지 (아사쿠사)',                 cat:'attraction', time:'08:30', memo:'아침 일찍 가야 한산해요' },
+    { id:62, name:'오이와케당고 혼포',                 cat:'restaurant', time:'09:30', memo:'센소지 근처 간식' },
+    { id:49, name:'도쿄 국립박물관',                   cat:'attraction', time:'10:30', memo:'약 2시간 소요' },
+    { id:20, name:'teamLab Borderless: MORI Building DIGITAL ART MUSEUM', cat:'attraction', time:'14:30', memo:'사전 예약 필수! 가미야초역 도보 2분, 2~3시간 소요' },
+  ],
+  3: [
+    { id:39, name:'네즈카페',                          cat:'restaurant', time:'10:00', memo:'네즈미술관 입장 필요, 10:30 도착하면 창가자리 가능' },
+    { id:8,  name:'오모테산도 힐즈',                   cat:'shopping',   time:'12:00', memo:'도보 10분 거리' },
+    { id:16, name:'긴자 식스 (GINZA SIX)',             cat:'shopping',   time:'14:00', memo:'긴자로 이동 (지하철 10분)' },
+    { id:38, name:'ART AQUARIUM MUSEUM',               cat:'attraction', time:'15:30', memo:'긴자 미쓰코시 9층, 1~2시간' },
+    { id:10, name:'시부야 스크램블 교차로',            cat:'attraction', time:'17:00', memo:'긴자선으로 20분' },
+    { id:5,  name:'시부야 파르코',                     cat:'shopping',   time:'17:30', memo:'쇼핑' },
+    { id:45, name:'스타벅스 리저브 로스터리 도쿄',    cat:'restaurant', time:'19:30', memo:'나카메구로, 시부야에서 도보 15분' },
+  ],
+  4: [
+    { id:4,  name:'쓰키지 수산시장',                   cat:'restaurant', time:'09:00', memo:'숙소에서 지하철 5분, 아침 해산물' },
+    { id:30, name:'도쿄 오카시랜드 (도쿄역)',          cat:'restaurant', time:'10:30', memo:'기념품 쇼핑' },
+    { id:15, name:'나리타 공항',                       cat:'transport',  time:'13:00', memo:'도쿄역에서 나리타 익스프레스, 11:30 탑승' },
+  ],
+  5: [], 6: [], 7: []
+};
+
 /* ════ MAP ════ */
 function initMap() {
   map = L.map('map').setView([35.6892, 139.7316], 12);
@@ -1296,7 +1328,11 @@ function setStatus(msg) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   // 로컬 먼저 불러와서 빠르게 화면 표시
-  loadFromLocal();
+  const localLoaded = loadFromLocal();
+  // 저장된 데이터 없으면 기본 여행 플랜 적용
+  if (!localLoaded) {
+    schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
+  }
   initMap();
   renderFilter();
   renderLegend();
@@ -1308,7 +1344,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setStatus('☁️ 클라우드에서 불러오는 중...');
   const cloudLoaded = await loadFromSupabase();
   if (cloudLoaded) {
-    // 클라우드 데이터로 화면 업데이트
     Object.values(markers).forEach(m=>m.remove());
     markers = {};
     renderMarkers();
@@ -1317,8 +1352,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderSchedule();
     renderPlaceGrid();
     setStatus('☁️ 클라우드 데이터 불러옴');
-  } else {
+  } else if (localLoaded) {
     setStatus('📱 로컬 데이터 사용 중');
+  } else {
+    setStatus('🗓 기본 여행 플랜이 적용됐어요!');
+    autoSave();
   }
 });
 </script>
